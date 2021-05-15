@@ -15,7 +15,7 @@ neuro login
 | Local directory | Description | Storage URI | Environment mounting point |
 |:--------------- |:----------- |:----------- |:-------------------------- | 
 | `data/` | Data | `storage:mlops-demo-oss-names/data/` | `/mlops-demo-oss-names/data/` | 
-| `modules/` | Python modules | `storage:mlops-demo-oss-names/modules/` | `/mlops-demo-oss-names/modules/` |
+| `rnn/` | Python modules | `storage:mlops-demo-oss-names/rnn/` | `/mlops-demo-oss-names/rnn/` |
 | `config/` | Configuration files | `storage:mlops-demo-oss-names/config/` | `/mlops-demo-oss-names/config/` |
 | `notebooks/` | Jupyter notebooks | `storage:mlops-demo-oss-names/notebooks/` | `/mlops-demo-oss-names/notebooks/` |
 | `results/` | Logs and results | `storage:mlops-demo-oss-names/results/` | `/mlops-demo-oss-names/results/` |
