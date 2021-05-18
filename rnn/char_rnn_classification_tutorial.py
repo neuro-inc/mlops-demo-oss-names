@@ -462,7 +462,6 @@ ax.yaxis.set_major_locator(ticker.MultipleLocator(1))
 # sphinx_gallery_thumbnail_number = 2
 plt.show()
 
-writer.add_figure(f"training/loss", figure=fig)
 
 ######################################################################
 # You can pick out bright spots off the main axis that show which
