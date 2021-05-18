@@ -52,9 +52,12 @@ jobs:
     env:
       EXPOSE_SSH: "yes"
       PYTHONPATH: $[[ volumes.code.mount ]]
+    params:
+      train_iterations: "10000"
     bash: |
         cd $[[ volumes.project.mount ]]
-        python -u $[[ volumes.code.mount ]]/char_rnn_classification_tutorial.py
+        python -u $[[ volumes.code.mount ]]/char_rnn_classification_tutorial.py \
+          --dump_dir $[[ volumes.results.mount ]] --data_path $[[ volumes.data.mount ]] --n_iters $[[ params.train_iterations ]]
 
   jupyter:
     action: gh:neuro-actions/jupyter@v1.0.0
