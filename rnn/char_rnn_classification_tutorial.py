@@ -73,10 +73,15 @@ from __future__ import unicode_literals, print_function, division
 from io import open
 import glob
 import os
+from pathlib import Path
 
-def findFiles(path): return glob.glob(path)
+from utils import get_args
 
-print(findFiles('data/names/*.txt'))
+args = get_args()
+
+def findFiles(path: Path): return glob.glob(str(path))
+
+print(findFiles(args.data_path / "names" / "*.txt"))
 
 import unicodedata
 import string
@@ -103,7 +108,7 @@ def readLines(filename):
     lines = open(filename, encoding='utf-8').read().strip().split('\n')
     return [unicodeToAscii(line) for line in lines]
 
-for filename in findFiles('data/names/*.txt'):
+for filename in findFiles(args.data_path / "names" / "*.txt"):
     category = os.path.splitext(os.path.basename(filename))[0]
     all_categories.append(category)
     lines = readLines(filename)
@@ -141,6 +146,9 @@ print(category_lines['Italian'][:5])
 #
 
 import torch
+from torch.utils.tensorboard import SummaryWriter
+writer = SummaryWriter(log_dir=args.dump_dir / args.experiment_name)
+
 
 # Find letter index from all_letters, e.g. "a" = 0
 def letterToIndex(letter):
@@ -348,8 +356,8 @@ def train(category_tensor, line_tensor):
 import time
 import math
 
-n_iters = 100000
-print_every = 5000
+n_iters = args.n_iters
+print_every = int(n_iters * 0.05)
 plot_every = 1000
 
 
@@ -371,6 +379,8 @@ for iter in range(1, n_iters + 1):
     category, line, category_tensor, line_tensor = randomTrainingExample()
     output, loss = train(category_tensor, line_tensor)
     current_loss += loss
+
+    writer.add_scalar(f"training/loss", loss, global_step=iter)
 
     # Print iter number, loss, name and guess
     if iter % print_every == 0:

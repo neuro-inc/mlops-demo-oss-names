@@ -11,12 +11,17 @@ Then run:
 ```shell
 pip install -U neuro-cli neuro-flow
 neuro login
+# build docker image remotely on the platform
 neuro-flow build myimage
+# prepare storage folders
+neuro-flow mkvolumes
+# and upload data
 neuro-flow upload ALL
-# to work with an interactive notebook
+# to work with an interactive notebook, hit
 neuro-flow run jupyter
-# to run training on the platform
-neuro-flow run training
+# to run training on the platform, hit
+neuro-flow run tensorboard
+neuro-flow run train
 ```
 
 See [Help.md](HELP.md) for the detailed Neuro Project Template Reference.
