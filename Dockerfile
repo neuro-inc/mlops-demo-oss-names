@@ -1,6 +1,5 @@
-FROM neuromation/base:v1.7.8
+FROM ghcr.io/neuro-inc/base:v21.11.0-runtime
 
-RUN mkdir /project
 WORKDIR /project
 
 COPY apt.txt .
@@ -15,5 +14,3 @@ COPY setup.cfg .
 
 COPY requirements.txt .
 RUN pip install --progress-bar=off -U --no-cache-dir -r requirements.txt
-
-RUN ssh-keygen -f /id_rsa -t rsa -N neuro -q

@@ -4,19 +4,35 @@ This is an adaption of the [NLP FROM SCRATCH: CLASSIFYING NAMES WITH A CHARACTER
 
 ## Quick Start
 
-Sign up at [app.neu.ro](https://app.neu.ro) and setup your local machine according to [instructions](https://docs.neu.ro/).
+Sign up at [app.mlops.selectel.ru](https://app.mlops.selectel.ru) and setup your local machine according to [instructions](https://docs.neu.ro/).
  
 Then run:
 
+- Preparation
 ```shell
-pip install -U neuro-cli neuro-flow
+pip install pipx
+pipx install neuro-all
+pipx ensurepath
+# reload console
+# `pipx list` - list of installed packages 
 neuro login
 # build docker image remotely on the platform
 neuro-flow build myimage
 # prepare storage folders
 neuro-flow mkvolumes
 # and upload data
-neuro-flow upload ALL
+```
+
+- Create and download from bucket
+
+
+- Importing bucket credentials
+```shell
+beuro blob importbucket --aws-endpoint-url https://s3.selcdn.ru
+```
+
+```shell
+
 # to work with an interactive notebook, hit
 neuro-flow run jupyter
 # to run training on the platform, hit

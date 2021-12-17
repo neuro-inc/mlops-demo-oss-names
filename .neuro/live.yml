@@ -6,10 +6,6 @@ defaults:
   life_span: 1d
 
 volumes:
-  data:
-    remote: storage:$[[ flow.project_id ]]/data
-    mount: /project/data
-    local: data
   code:
     remote: storage:$[[ flow.project_id ]]/rnn
     mount: /project/rnn
@@ -42,34 +38,49 @@ jobs:
 
   train:
     image: $[[ images.myimage.ref ]]
-    detach: False
-    life_span: 10d
+    pass_config: true
+    multi: true
     volumes:
-      - $[[ upload(volumes.data).ref_ro ]]
       - $[[ upload(volumes.code).ref_ro ]]
       - $[[ upload(volumes.config).ref_ro ]]
       - $[[ volumes.results.ref_rw ]]
+    workdir: $[[ volumes.project.mount ]]
     env:
       EXPOSE_SSH: "yes"
       PYTHONPATH: $[[ volumes.code.mount ]]
     params:
       train_iterations: "10000"
     bash: |
-        cd $[[ volumes.project.mount ]]
+        tmpdir=`mktemp -d`
+        neuro blob cp -r blob:names-project/data $tmpdir
         python -u $[[ volumes.code.mount ]]/char_rnn_classification_tutorial.py \
-          --dump_dir $[[ volumes.results.mount ]] --data_path $[[ volumes.data.mount ]] --n_iters $[[ params.train_iterations ]]
+          --dump_dir $[[ volumes.results.mount ]] --data_path $tmpdir/data --n_iters $[[ params.train_iterations ]]
 
   jupyter:
-    action: gh:neuro-actions/jupyter@v1.0.0
-    args:
-      image: $[[ images.myimage.ref ]]
-      preset: cpu-small
-      multi_args: $[[ multi.args ]]
-      volumes_data_remote: $[[ upload(volumes.data).remote ]]
-      volumes_code_remote: $[[ upload(volumes.code).remote ]]
-      volumes_config_remote: $[[ upload(volumes.config).remote ]]
-      volumes_notebooks_remote: $[[ upload(volumes.notebooks).remote ]]
-      volumes_results_remote: $[[ volumes.results.remote ]]
+    image: $[[ images.myimage.ref ]]
+    browse: true
+    http_port: 8080
+    pass_config: True
+    multi: true
+    volumes:
+      - $[[ upload(volumes.code).ref_rw ]]
+      - $[[ upload(volumes.config).ref_rw ]]
+      - $[[ upload(volumes.notebooks).ref_rw ]]
+      - $[[ volumes.results.ref_rw ]]
+    workdir: /project
+    env:
+      PYTHONPATH: $[[ volumes.code.mount ]]
+    bash: |
+      neuro blob cp -r blob:names-project/data /project/data
+      jupyter lab \
+        --no-browser \
+        --ip=0.0.0.0 \
+        --port=8080 \
+        --allow-root \
+        --NotebookApp.token= \
+        --NotebookApp.shutdown_no_activity_timeout=7200 \
+        --MappingKernelManager.cull_idle_timeout=7200 \
+        --notebook-dir=$[[ volumes.notebooks.mount ]]
 
   tensorboard:
     action: gh:neuro-actions/tensorboard@v1.0.0
