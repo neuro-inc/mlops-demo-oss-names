@@ -4,65 +4,127 @@ title: MLOps Demo - OSS - Names
 defaults:
   preset: cpu-small
   life_span: 1d
+  env:
+    PACHY_URI: 20.81.29.4:30650
+    MLFLOW_URI: https://live-mlflow-server--alexeynaiden.jobs.onprem-poc.org.neu.ro
 
 volumes:
   data:
-    remote: storage:$[[ flow.project_id ]]/data
+    remote: storage:/$[[ project.owner ]]/$[[ flow.project_id ]]/data
     mount: /project/data
     local: data
   code:
-    remote: storage:$[[ flow.project_id ]]/rnn
+    remote: storage:/$[[ project.owner ]]/$[[ flow.project_id ]]/rnn
     mount: /project/rnn
     local: rnn
   config:
-    remote: storage:$[[ flow.project_id ]]/config
+    remote: storage:/$[[ project.owner ]]/$[[ flow.project_id ]]/config
     mount: /project/config
     local: config
   notebooks:
-    remote: storage:$[[ flow.project_id ]]/notebooks
+    remote: storage:/$[[ project.owner ]]/$[[ flow.project_id ]]/notebooks
     mount: /project/notebooks
     local: notebooks
   results:
-    remote: storage:$[[ flow.project_id ]]/results
+    remote: storage:/$[[ project.owner ]]/$[[ flow.project_id ]]/results
     mount: /project/results
     local: results
   project:
-    remote: storage:$[[ flow.project_id ]]
+    remote: storage:/$[[ project.owner ]]/$[[ flow.project_id ]]
     mount: /project
     local: .
 
 images:
-  myimage:
-    ref: image:$[[ flow.project_id ]]:v3
+  train:
+    ref: image:/$[[ project.owner ]]/$[[ flow.project_id ]]:v3
     dockerfile: $[[ flow.workspace ]]/Dockerfile
     context: $[[ flow.workspace ]]/
-    build_preset: cpu-small
+    build_preset: cpu-medium
+  seldon:
+    ref: image:/$[[ project.owner ]]/$[[ flow.flow_id ]]/seldon:21.1.1
+    dockerfile: $[[ flow.workspace ]]/seldon/seldon.Dockerfile
+    context: $[[ flow.workspace ]]/
+    build_preset: cpu-medium
 
 jobs:
+  create_pipelines:
+    name: $[[ flow.flow_id ]]-create-pipeline
+    image: $[[ images.train.ref ]]
+    volumes:
+      - $[[ upload(volumes.project).ref_ro ]]
+      - $[[ upload(volumes.config).ref_ro ]]
+    params:
+      mlflow_storage:
+        default: "storage:"
+        descr: Storage path, where MLFlow server stores trained model binaries
+    env:
+      NEURO_PASSED_CONFIG: secret:platform-config-names
+    bash: |
+      # Init pachctl
+      pachctl config update context default --pachd-address ${PACHY_URI}
+      pachctl config set active-context default
+
+      # delete pipelines if they exist
+      pachctl delete pipeline train >/dev/null
+      pachctl delete pipeline preprocess >/dev/null
+
+      # Create pipeline preprocess
+      pachctl create pipeline -f $[[volumes.project.mount]]/config/pipelines/preprocess.json
+
+      # Create pipeline train
+      LIVE_B64=$(cat $[[volumes.project.mount]]/.neuro/live.yml | base64 -w 0)
+      PROJECT_B64=$(cat $[[volumes.project.mount]]/.neuro/project.yml | base64 -w 0)
+      cp $[[volumes.project.mount]]/config/pipelines/train.json /tmp/train.json
+      sed -i -e s/##NEURO_PASSED_CONFIG##/${NEURO_PASSED_CONFIG}/ /tmp/train.json
+      sed -i -e s/##LIVE_B64##/${LIVE_B64}/ /tmp/train.json
+      sed -i -e s/##PROJECT_B64##/${PROJECT_B64}/ /tmp/train.json
+      sed -i -e s/##PACHY_URI##/${PACHY_URI}/ /tmp/train.json
+      sed -i -e s\|##MLFLOW_URI##\|${MLFLOW_URI}\| /tmp/train.json
+      pachctl create pipeline -f /tmp/train.json
+
+      echo "Pipelines created successfully."
 
   train:
-    image: $[[ images.myimage.ref ]]
+    image: $[[ images.train.ref ]]
     detach: False
     life_span: 10d
     volumes:
-      - $[[ upload(volumes.data).ref_ro ]]
-      - $[[ upload(volumes.code).ref_ro ]]
-      - $[[ upload(volumes.config).ref_ro ]]
+      - $[[ volumes.code.ref_ro ]]
+      - $[[ volumes.config.ref_ro ]]
       - $[[ volumes.results.ref_rw ]]
+      - $[[ volumes.project.ref_rw ]]
+      - ${{ params.mlflow_storage }}:/usr/local/share/mlruns:rw
     env:
       EXPOSE_SSH: "yes"
       PYTHONPATH: $[[ volumes.code.mount ]]
+      PACHY_URI: ${{ params.pachy_uri }}
+      PACHY_REPO: preprocess
+      PACHY_BRANCH: master
+      MLFLOW_TRACKING_URI: ${{ params.mlflow_uri }}
     params:
-      train_iterations: "10000"
+      train_iterations: "1000"
+      mlflow_uri: ~
+      pachy_uri: ~
+      mlflow_storage: storage:/$[[project.owner]]/${{ flow.project_id }}/mlruns
     bash: |
+        DATA_PATH=/pfs-data
         cd $[[ volumes.project.mount ]]
+        mkdir -p "$DATA_PATH"
+
+        # Init pachctl
+        pachctl config update context default --pachd-address ${PACHY_URI}
+        pachctl config set active-context default
+
+        pachctl get file ${PACHY_REPO}@${PACHY_BRANCH}:/ -r -o "$DATA_PATH" | tee
+        ls -R "$DATA_PATH"
+
         python -u $[[ volumes.code.mount ]]/char_rnn_classification_tutorial.py \
-          --dump_dir $[[ volumes.results.mount ]] --data_path $[[ volumes.data.mount ]] --n_iters $[[ params.train_iterations ]]
+          --dump_dir $[[ volumes.results.mount ]] --data_path "$DATA_PATH" --n_iters $[[ params.train_iterations ]]
 
   jupyter:
     action: gh:neuro-actions/jupyter@v1.0.0
     args:
-      image: $[[ images.myimage.ref ]]
+      image: $[[ images.train.ref ]]
       preset: cpu-small
       multi_args: $[[ multi.args ]]
       volumes_data_remote: $[[ upload(volumes.data).remote ]]
@@ -80,3 +142,34 @@ jobs:
     action: gh:neuro-actions/filebrowser@v1.0.0
     args:
       volumes_project_remote: $[[ volumes.project.remote ]]
+
+  postgres:
+    image: image:postgres:12.5
+    name: $[[ flow.flow_id ]]-postgres
+    preset: cpu-small
+    http_port: 5432
+    http_auth: False
+    life_span: 30d
+    detach: True
+    volumes:
+      - disk:mlops-demo-oss-dogs-postgres:/var/lib/postgresql/data:rw
+    env:
+      POSTGRES_PASSWORD: password
+      POSTGRES_INITDB_ARGS: ""
+      PGDATA: /var/lib/postgresql/data/pgdata
+
+  mlflow_server:
+    image: neuromation/mlflow:1.11.0
+    name: $[[ flow.flow_id ]]-mlflow-server
+    preset: cpu-small
+    http_port: 5000
+    http_auth: False
+    browse: True
+    life_span: 30d
+    detach: True
+    volumes:
+      - storage:/$[[project.owner]]/${{ flow.project_id }}/mlruns:/usr/local/share/mlruns
+    cmd: |
+      server --host 0.0.0.0
+        --backend-store-uri=postgresql://postgres:password@${{ inspect_job('postgres').internal_hostname_named }}:5432
+        --default-artifact-root=/usr/local/share/mlruns

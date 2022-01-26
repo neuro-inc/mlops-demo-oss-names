@@ -1,0 +1,35 @@
+{
+  "pipeline": {
+    "name": "train"
+  },
+  "description": "A pipeline that runs training.",
+  "transform": {
+    "image": "ghcr.io/neuro-inc/neuro-flow:21.11.2",
+    "cmd": [
+      "/bin/bash"
+    ],
+    "stdin": [
+      "echo Running job_id = $PACH_JOB_ID / commit_id = $PACH_OUTPUT_COMMIT_ID",
+      "cd /tmp",
+      "mkdir -p .neuro",
+      "echo $LIVE_B64 | base64 -d > .neuro/live.yaml",
+      "echo $PROJECT_B64 | base64 -d > .neuro/project.yaml",
+      "neuro-flow kill train",
+      "neuro-flow --show-traceback run train --param mlflow_uri ${MLFLOW_URI} --param pachy_uri ${PACHY_URI}"
+    ],
+    "debug": true,
+    "env": {
+      "NEURO_PASSED_CONFIG": "##NEURO_PASSED_CONFIG##",
+      "LIVE_B64": "##LIVE_B64##",
+      "PROJECT_B64": "##PROJECT_B64##",
+      "MLFLOW_URI": "##MLFLOW_URI##",
+      "PACHY_URI": "##PACHY_URI##"
+    }
+  },
+  "input": {
+    "pfs": {
+      "repo": "preprocess",
+      "glob": "/"
+    }
+  }
+}

@@ -74,20 +74,26 @@ from io import open
 import glob
 import os
 from pathlib import Path
+from typing import List
+
+import mlflow
 
 from utils import get_args
 
 args = get_args()
 
+
 def findFiles(path: Path): return glob.glob(str(path))
 
-print(findFiles(args.data_path / "names" / "*.txt"))
+
+print(findFiles(args.data_path / "*.txt"))
 
 import unicodedata
 import string
 
 all_letters = string.ascii_letters + " .,;'"
 n_letters = len(all_letters)
+
 
 # Turn a Unicode string to plain ASCII, thanks to https://stackoverflow.com/a/518232/2809427
 def unicodeToAscii(s):
@@ -97,35 +103,27 @@ def unicodeToAscii(s):
         and c in all_letters
     )
 
+
 print(unicodeToAscii('Ślusàrski'))
 
 # Build the category_lines dictionary, a list of names per language
 category_lines = {}
 all_categories = []
 
+
 # Read a file and split into lines
 def readLines(filename):
     lines = open(filename, encoding='utf-8').read().strip().split('\n')
     return [unicodeToAscii(line) for line in lines]
 
-for filename in findFiles(args.data_path / "names" / "*.txt"):
+
+for filename in findFiles(args.data_path / "*.txt"):
     category = os.path.splitext(os.path.basename(filename))[0]
     all_categories.append(category)
     lines = readLines(filename)
     category_lines[category] = lines
 
 n_categories = len(all_categories)
-
-
-######################################################################
-# Now we have ``category_lines``, a dictionary mapping each category
-# (language) to a list of lines (names). We also kept track of
-# ``all_categories`` (just a list of languages) and ``n_categories`` for
-# later reference.
-#
-
-print(category_lines['Italian'][:5])
-
 
 ######################################################################
 # Turning Names into Tensors
@@ -147,6 +145,7 @@ print(category_lines['Italian'][:5])
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
+
 writer = SummaryWriter(log_dir=args.dump_dir / args.experiment_name)
 
 
@@ -154,11 +153,13 @@ writer = SummaryWriter(log_dir=args.dump_dir / args.experiment_name)
 def letterToIndex(letter):
     return all_letters.find(letter)
 
+
 # Just for demonstration, turn a letter into a <1 x n_letters> Tensor
 def letterToTensor(letter):
     tensor = torch.zeros(1, n_letters)
     tensor[0][letterToIndex(letter)] = 1
     return tensor
+
 
 # Turn a line into a <line_length x 1 x n_letters>,
 # or an array of one-hot letter vectors
@@ -168,10 +169,10 @@ def lineToTensor(line):
         tensor[li][0][letterToIndex(letter)] = 1
     return tensor
 
+
 print(letterToTensor('J'))
 
 print(lineToTensor('Jones').size())
-
 
 ######################################################################
 # Creating the Network
@@ -196,6 +197,7 @@ print(lineToTensor('Jones').size())
 
 import torch.nn as nn
 
+
 class RNN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super(RNN, self).__init__()
@@ -216,9 +218,9 @@ class RNN(nn.Module):
     def initHidden(self):
         return torch.zeros(1, self.hidden_size)
 
+
 n_hidden = 128
 rnn = RNN(n_letters, n_hidden, n_categories)
-
 
 ######################################################################
 # To run a step of this network we need to pass an input (in our case, the
@@ -232,7 +234,6 @@ input = letterToTensor('A')
 hidden = torch.zeros(1, n_hidden)
 
 output, next_hidden = rnn(input, hidden)
-
 
 ######################################################################
 # For the sake of efficiency we don't want to be creating a new Tensor for
@@ -272,8 +273,8 @@ def categoryFromOutput(output):
     category_i = top_i[0].item()
     return all_categories[category_i], category_i
 
-print(categoryFromOutput(output))
 
+print(categoryFromOutput(output))
 
 ######################################################################
 # We will also want a quick way to get a training example (a name and its
@@ -282,8 +283,10 @@ print(categoryFromOutput(output))
 
 import random
 
+
 def randomChoice(l):
     return l[random.randint(0, len(l) - 1)]
+
 
 def randomTrainingExample():
     category = randomChoice(all_categories)
@@ -292,10 +295,10 @@ def randomTrainingExample():
     line_tensor = lineToTensor(line)
     return category, line, category_tensor, line_tensor
 
+
 for i in range(10):
     category, line, category_tensor, line_tensor = randomTrainingExample()
     print('category =', category, '/ line =', line)
-
 
 ######################################################################
 # Training the Network
@@ -309,7 +312,6 @@ for i in range(10):
 #
 
 criterion = nn.NLLLoss()
-
 
 ######################################################################
 # Each loop of training will:
@@ -325,7 +327,8 @@ criterion = nn.NLLLoss()
 # -  Return the output and loss
 #
 
-learning_rate = 0.005 # If you set this too high, it might explode. If too low, it might not learn
+learning_rate = 0.005  # If you set this too high, it might explode. If too low, it might not learn
+
 
 def train(category_tensor, line_tensor):
     hidden = rnn.initHidden()
@@ -360,11 +363,10 @@ n_iters = args.n_iters
 print_every = int(n_iters * 0.05)
 plot_every = 1000
 
-
-
 # Keep track of losses for plotting
 current_loss = 0
 all_losses = []
+
 
 def timeSince(since):
     now = time.time()
@@ -373,170 +375,59 @@ def timeSince(since):
     s -= m * 60
     return '%dm %ds' % (m, s)
 
+
+def save_artifacts(model: RNN, categories: List[str],
+                   output_dir: Path = args.dump_dir / args.experiment_name):
+    """Save model and categories to output_dir"""
+    output_dir.mkdir(exist_ok=True, parents=True)
+    model_file = output_dir / "model.pt"
+    torch.save(model.state_dict(), model_file)
+    print(f"Saved model {model} to {model_file}")
+
+    categories_file: Path = output_dir / "categories.txt"
+    categories_file.write_text("\n".join(categories))
+    print(f"Saved categories {categories} to {categories_file}")
+
+
 start = time.time()
 
-for iter in range(1, n_iters + 1):
-    category, line, category_tensor, line_tensor = randomTrainingExample()
-    output, loss = train(category_tensor, line_tensor)
-    current_loss += loss
+with mlflow.start_run() as run:
+    mlflow.log_params({
+        'n_iters': n_iters,
+        'n_categories': n_categories
+    })
+    total_loss = 0
+    for iter in range(1, n_iters + 1):
+        category, line, category_tensor, line_tensor = randomTrainingExample()
 
-    writer.add_scalar(f"training/loss", loss, global_step=iter)
+        output, loss = train(category_tensor, line_tensor)
+        current_loss += loss
+        total_loss += loss
+        mlflow.log_metrics({
+            'total_loss': total_loss,
+            'avg_loss': total_loss / iter
+        })
 
-    # Print iter number, loss, name and guess
-    if iter % print_every == 0:
-        guess, guess_i = categoryFromOutput(output)
-        correct = '✓' if guess == category else '✗ (%s)' % category
-        print('%d %d%% (%s) %.4f %s / %s %s' % (iter, iter / n_iters * 100, timeSince(start), loss, line, guess, correct))
+        writer.add_scalar(f"training/loss", loss, global_step=iter)
 
-    # Add current loss avg to list of losses
-    if iter % plot_every == 0:
-        all_losses.append(current_loss / plot_every)
-        current_loss = 0
+        # Print iter number, loss, name and guess
+        if iter % print_every == 0:
+            guess, guess_i = categoryFromOutput(output)
+            correct = '✓' if guess == category else '✗ (%s)' % category
+            print('%d %d%% (%s) %.4f %s / %s %s' % (
+                iter, iter / n_iters * 100, timeSince(start), loss, line, guess, correct))
 
+        # Add current loss avg to list of losses
+        if iter % plot_every == 0:
+            all_losses.append(current_loss / plot_every)
+            current_loss = 0
 
-######################################################################
-# Plotting the Results
-# --------------------
-#
-# Plotting the historical loss from ``all_losses`` shows the network
-# learning:
-#
-
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
-
-plt.figure()
-plt.plot(all_losses)
-
-
-######################################################################
-# Evaluating the Results
-# ======================
-#
-# To see how well the network performs on different categories, we will
-# create a confusion matrix, indicating for every actual language (rows)
-# which language the network guesses (columns). To calculate the confusion
-# matrix a bunch of samples are run through the network with
-# ``evaluate()``, which is the same as ``train()`` minus the backprop.
-#
-
-# Keep track of correct guesses in a confusion matrix
-confusion = torch.zeros(n_categories, n_categories)
-n_confusion = 10000
-
-# Just return an output given a line
-def evaluate(line_tensor):
-    hidden = rnn.initHidden()
-
-    for i in range(line_tensor.size()[0]):
-        output, hidden = rnn(line_tensor[i], hidden)
-
-    return output
-
-# Go through a bunch of examples and record which are correctly guessed
-for i in range(n_confusion):
-    category, line, category_tensor, line_tensor = randomTrainingExample()
-    output = evaluate(line_tensor)
-    guess, guess_i = categoryFromOutput(output)
-    category_i = all_categories.index(category)
-    confusion[category_i][guess_i] += 1
-
-# Normalize by dividing every row by its sum
-for i in range(n_categories):
-    confusion[i] = confusion[i] / confusion[i].sum()
-
-# Set up plot
-fig = plt.figure()
-ax = fig.add_subplot(111)
-cax = ax.matshow(confusion.numpy())
-fig.colorbar(cax)
-
-# Set up axes
-ax.set_xticklabels([''] + all_categories, rotation=90)
-ax.set_yticklabels([''] + all_categories)
-
-# Force label at every tick
-ax.xaxis.set_major_locator(ticker.MultipleLocator(1))
-ax.yaxis.set_major_locator(ticker.MultipleLocator(1))
-
-# sphinx_gallery_thumbnail_number = 2
-plt.show()
-
-
-######################################################################
-# You can pick out bright spots off the main axis that show which
-# languages it guesses incorrectly, e.g. Chinese for Korean, and Spanish
-# for Italian. It seems to do very well with Greek, and very poorly with
-# English (perhaps because of overlap with other languages).
-#
-
-
-######################################################################
-# Running on User Input
-# ---------------------
-#
-
-def predict(input_line, n_predictions=3):
-    print('\n> %s' % input_line)
-    with torch.no_grad():
-        output = evaluate(lineToTensor(input_line))
-
-        # Get top N categories
-        topv, topi = output.topk(n_predictions, 1, True)
-        predictions = []
-
-        for i in range(n_predictions):
-            value = topv[0][i].item()
-            category_index = topi[0][i].item()
-            print('(%.2f) %s' % (value, all_categories[category_index]))
-            predictions.append([value, all_categories[category_index]])
-
-predict('Dovesky')
-predict('Jackson')
-predict('Satoshi')
-
-
-######################################################################
-# The final versions of the scripts `in the Practical PyTorch
-# repo <https://github.com/spro/practical-pytorch/tree/master/char-rnn-classification>`__
-# split the above code into a few files:
-#
-# -  ``data.py`` (loads files)
-# -  ``model.py`` (defines the RNN)
-# -  ``train.py`` (runs training)
-# -  ``predict.py`` (runs ``predict()`` with command line arguments)
-# -  ``server.py`` (serve prediction as a JSON API with bottle.py)
-#
-# Run ``train.py`` to train and save the network.
-#
-# Run ``predict.py`` with a name to view predictions:
-#
-# ::
-#
-#     $ python predict.py Hazaki
-#     (-0.42) Japanese
-#     (-1.39) Polish
-#     (-3.51) Czech
-#
-# Run ``server.py`` and visit http://localhost:5533/Yourname to get JSON
-# output of predictions.
-#
-
-
-######################################################################
-# Exercises
-# =========
-#
-# -  Try with a different dataset of line -> category, for example:
-#
-#    -  Any word -> language
-#    -  First name -> gender
-#    -  Character name -> writer
-#    -  Page title -> blog or subreddit
-#
-# -  Get better results with a bigger and/or better shaped network
-#
-#    -  Add more linear layers
-#    -  Try the ``nn.LSTM`` and ``nn.GRU`` layers
-#    -  Combine multiple of these RNNs as a higher level network
-#
+    save_artifacts(rnn, all_categories, Path("/tmp/saved_models"))
+    print('Running log_model')
+    mlflow.pytorch.log_model(rnn,
+                             "model",
+                             registered_model_name="names",
+                             extra_files=[
+                                 "/tmp/saved_models/categories.txt"
+                             ])
+    print('Finished log_artifact')

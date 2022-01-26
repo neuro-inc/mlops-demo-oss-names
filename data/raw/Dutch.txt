@@ -1,13 +1,16 @@
 Aalsburg
 Aalst
+
 Aarle
 Achteren
 Achthoven
 Adrichem
+
 Aggelen
 Agteren
 Agthoven
 Akkeren
+
 Aller
 Alphen
 Alst
@@ -34,10 +37,12 @@ Buiren
 Buren
 Can
 Cann
+
 Canne
 Daal
 Daalen
 Dael
+
 Daele
 Dale
 Dalen
@@ -261,6 +266,7 @@ Severijns
 Severins
 Sevriens
 Silje
+
 Simon
 Simonis
 Slootmaekers
