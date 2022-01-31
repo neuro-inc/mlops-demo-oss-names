@@ -1,3 +1,46 @@
 id: mlops_demo_oss_names
 role: alexeynaiden/projects/mlops_demo_oss_names
 owner: alexeynaiden
+
+volumes:
+  data:
+    remote: storage:/$[[ project.owner ]]/$[[ flow.project_id ]]/data
+    mount: /project/data
+    local: data
+  code:
+    remote: storage:/$[[ project.owner ]]/$[[ flow.project_id ]]/rnn
+    mount: /project/rnn
+    local: rnn
+  config:
+    remote: storage:/$[[ project.owner ]]/$[[ flow.project_id ]]/config
+    mount: /project/config
+    local: config
+  notebooks:
+    remote: storage:/$[[ project.owner ]]/$[[ flow.project_id ]]/notebooks
+    mount: /project/notebooks
+    local: notebooks
+  results:
+    remote: storage:/$[[ project.owner ]]/$[[ flow.project_id ]]/results
+    mount: /project/results
+    local: results
+  project:
+    remote: storage:/$[[ project.owner ]]/$[[ flow.project_id ]]
+    mount: /project
+    local: .
+
+images:
+  train:
+    ref: image:/$[[ project.owner ]]/$[[ flow.project_id ]]:v3
+    dockerfile: $[[ flow.workspace ]]/Dockerfile
+    context: $[[ flow.workspace ]]/
+    build_preset: cpu-medium
+  seldon:
+    ref: image:/$[[ project.owner ]]/$[[ flow.flow_id ]]/seldon:21.1.1
+    dockerfile: $[[ flow.workspace ]]/seldon/seldon.Dockerfile
+    context: $[[ flow.workspace ]]/
+    build_preset: cpu-medium
+  preprocess:
+    ref: image:/$[[ project.owner ]]/$[[ flow.flow_id ]]/preprocess:21.1.1
+    dockerfile: $[[ flow.workspace ]]/preprocess/Dockerfile
+    context: $[[ flow.workspace ]]/preprocess
+    build_preset: cpu-medium

@@ -4,31 +4,18 @@
   },
   "description": "A pipeline that sends out an email notification when there's new data.",
   "transform": {
-    "image": "ghcr.io/neuro-inc/neuro-flow:21.11.2",
-    "cmd": [
-      "/bin/bash"
+    "image": "registry.onprem-poc.org.neu.ro/alexeynaiden/live/preprocess:21.1.1",
+    "image_pull_secrets": ["neuro-registry-auth"],
+    "secrets": [
+      {
+        "name": "sendgrid",
+        "mount_path": "/tmp/sendgrid"
+      }
     ],
-    "stdin": [
-      "echo Files for preprocessing:",
-      "ls /pfs/inbox/",
-      "pip install -qqq httpie",
-      "echo Sending email notification",
-      "http --ignore-stdin POST https://api.sendgrid.com/v3/mail/send Authorization:\"Bearer $SENDGRID_API_KEY\" \\",
-      "personalizations[0][to][][email]='alexey.naiden@neu.ro' \\",
-      "from[email]='no-reply@neu.ro' \\",
-      "subject='New raw data' \\",
-      "template_id='d-7c2124297cee4693afeef49546b178bb'",
-      "for file in /pfs/inbox/*; do \\",
-      "echo Preprocessing $file... \\ ",
-      "grep '[^[:blank:]]' < $file > /pfs/out/$(basename $file)",
-      "echo Completed",
-      "done",
-      "echo All done"
-    ],
+    "cmd": ["/preprocess.sh"],
     "env": {
-      "SENDGRID_API_KEY": "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"
-    },
-    "debug": true
+      "NOTIFICATION_EMAIL": "alexey.naiden@neu.ro"
+    }
   },
   "input": {
     "pfs": {

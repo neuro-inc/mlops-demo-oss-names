@@ -21,9 +21,11 @@ setup:
 
 	@echo Setup done
 
-.PHONE: clean
+.PHONY: clean
 clean:
 	pachctl delete pipeline train
 	pachctl delete pipeline preprocess
 	pachctl delete repo $(INBOX_REPO)
 	pachctl delete repo $(TRAIN_REPO)
+
+

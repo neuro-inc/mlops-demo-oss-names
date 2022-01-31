@@ -1,50 +1,10 @@
 kind: live
-title: MLOps Demo - OSS - Names
+title: MLOps Demo - Names
 
 defaults:
-  preset: cpu-small
-  life_span: 1d
   env:
-    PACHY_URI: 20.81.29.4:30650
+    PACHY_URI:  api.pachyderm.mlops.neu.ro:30650
     MLFLOW_URI: https://live-mlflow-server--alexeynaiden.jobs.onprem-poc.org.neu.ro
-
-volumes:
-  data:
-    remote: storage:/$[[ project.owner ]]/$[[ flow.project_id ]]/data
-    mount: /project/data
-    local: data
-  code:
-    remote: storage:/$[[ project.owner ]]/$[[ flow.project_id ]]/rnn
-    mount: /project/rnn
-    local: rnn
-  config:
-    remote: storage:/$[[ project.owner ]]/$[[ flow.project_id ]]/config
-    mount: /project/config
-    local: config
-  notebooks:
-    remote: storage:/$[[ project.owner ]]/$[[ flow.project_id ]]/notebooks
-    mount: /project/notebooks
-    local: notebooks
-  results:
-    remote: storage:/$[[ project.owner ]]/$[[ flow.project_id ]]/results
-    mount: /project/results
-    local: results
-  project:
-    remote: storage:/$[[ project.owner ]]/$[[ flow.project_id ]]
-    mount: /project
-    local: .
-
-images:
-  train:
-    ref: image:/$[[ project.owner ]]/$[[ flow.project_id ]]:v3
-    dockerfile: $[[ flow.workspace ]]/Dockerfile
-    context: $[[ flow.workspace ]]/
-    build_preset: cpu-medium
-  seldon:
-    ref: image:/$[[ project.owner ]]/$[[ flow.flow_id ]]/seldon:21.1.1
-    dockerfile: $[[ flow.workspace ]]/seldon/seldon.Dockerfile
-    context: $[[ flow.workspace ]]/
-    build_preset: cpu-medium
 
 jobs:
   create_pipelines:
@@ -53,18 +13,16 @@ jobs:
     volumes:
       - $[[ upload(volumes.project).ref_ro ]]
       - $[[ upload(volumes.config).ref_ro ]]
-    params:
-      mlflow_storage:
-        default: "storage:"
-        descr: Storage path, where MLFlow server stores trained model binaries
     env:
-      NEURO_PASSED_CONFIG: secret:platform-config-names
+      NEURO_CONFIG: secret:platform-config-names
+      PACHY_TOKEN: secret:pachyderm-token
     bash: |
       # Init pachctl
       pachctl config update context default --pachd-address ${PACHY_URI}
       pachctl config set active-context default
+      echo "$PACHY_TOKEN" | pachctl auth use-auth-token
 
-      # delete pipelines if they exist
+      # Delete pipelines if they exist
       pachctl delete pipeline train >/dev/null
       pachctl delete pipeline preprocess >/dev/null
 
@@ -72,14 +30,13 @@ jobs:
       pachctl create pipeline -f $[[volumes.project.mount]]/config/pipelines/preprocess.json
 
       # Create pipeline train
-      LIVE_B64=$(cat $[[volumes.project.mount]]/.neuro/live.yml | base64 -w 0)
-      PROJECT_B64=$(cat $[[volumes.project.mount]]/.neuro/project.yml | base64 -w 0)
-      cp $[[volumes.project.mount]]/config/pipelines/train.json /tmp/train.json
-      sed -i -e s/##NEURO_PASSED_CONFIG##/${NEURO_PASSED_CONFIG}/ /tmp/train.json
+      export LIVE_B64=$(cat $[[volumes.project.mount]]/.neuro/live.yml | base64 -w 0)
+      export PROJECT_B64=$(cat $[[volumes.project.mount]]/.neuro/project.yml | base64 -w 0)
+      cp $[[volumes.project.mount]]/config/pipelines/train.json /tmp/train-template.json
+      envsubst '$NEURO_CONFIG $MLFLOW_URI $PACHY_URI' < /tmp/train-template.json > /tmp/train.json
       sed -i -e s/##LIVE_B64##/${LIVE_B64}/ /tmp/train.json
       sed -i -e s/##PROJECT_B64##/${PROJECT_B64}/ /tmp/train.json
-      sed -i -e s/##PACHY_URI##/${PACHY_URI}/ /tmp/train.json
-      sed -i -e s\|##MLFLOW_URI##\|${MLFLOW_URI}\| /tmp/train.json
+
       pachctl create pipeline -f /tmp/train.json
 
       echo "Pipelines created successfully."
@@ -95,17 +52,17 @@ jobs:
       - $[[ volumes.project.ref_rw ]]
       - ${{ params.mlflow_storage }}:/usr/local/share/mlruns:rw
     env:
-      EXPOSE_SSH: "yes"
       PYTHONPATH: $[[ volumes.code.mount ]]
       PACHY_URI: ${{ params.pachy_uri }}
       PACHY_REPO: preprocess
       PACHY_BRANCH: master
       MLFLOW_TRACKING_URI: ${{ params.mlflow_uri }}
+      PACHY_TOKEN: secret:/${{ project.owner }}/pachyderm-token
     params:
       train_iterations: "1000"
+      mlflow_storage: storage:/$[[ project.owner ]]/${{ flow.project_id }}/mlruns
       mlflow_uri: ~
       pachy_uri: ~
-      mlflow_storage: storage:/$[[project.owner]]/${{ flow.project_id }}/mlruns
     bash: |
         DATA_PATH=/pfs-data
         cd $[[ volumes.project.mount ]]
@@ -114,10 +71,12 @@ jobs:
         # Init pachctl
         pachctl config update context default --pachd-address ${PACHY_URI}
         pachctl config set active-context default
+        echo "$PACHY_TOKEN" | pachctl auth use-auth-token
 
+        # Get data
         pachctl get file ${PACHY_REPO}@${PACHY_BRANCH}:/ -r -o "$DATA_PATH" | tee
-        ls -R "$DATA_PATH"
 
+        # Run training
         python -u $[[ volumes.code.mount ]]/char_rnn_classification_tutorial.py \
           --dump_dir $[[ volumes.results.mount ]] --data_path "$DATA_PATH" --n_iters $[[ params.train_iterations ]]
 
@@ -133,13 +92,8 @@ jobs:
       volumes_notebooks_remote: $[[ upload(volumes.notebooks).remote ]]
       volumes_results_remote: $[[ volumes.results.remote ]]
 
-  tensorboard:
-    action: gh:neuro-actions/tensorboard@v1.0.0
-    args:
-      volumes_results_remote: $[[ volumes.results.remote ]]
-
   filebrowser:
-    action: gh:neuro-actions/filebrowser@v1.0.0
+    action: gh:neuro-actions/filebrowser@v1.0.1
     args:
       volumes_project_remote: $[[ volumes.project.remote ]]
 
