@@ -3,24 +3,28 @@
     "name": "preprocess"
   },
   "description": "A pipeline that sends out an email notification when there's new data.",
-  "transform": {
-    "image": "registry.onprem-poc.org.neu.ro/alexeynaiden/live/preprocess:21.1.1",
-    "image_pull_secrets": ["neuro-registry-auth"],
-    "secrets": [
-      {
-        "name": "sendgrid",
-        "mount_path": "/tmp/sendgrid"
-      }
-    ],
-    "cmd": ["/preprocess.sh"],
-    "env": {
-      "NOTIFICATION_EMAIL": "alexey.naiden@neu.ro"
-    }
-  },
   "input": {
     "pfs": {
       "repo": "inbox",
       "glob": "/"
     }
+  },
+  "transform": {
+    "image": "registry.onprem-poc.org.neu.ro/alexeynaiden/live/preprocess:21.1.1",
+    "cmd": [
+      "/preprocess.sh"
+    ],
+    "env": {
+      "NOTIFICATION_EMAIL": "alexey.naiden@neu.ro"
+    },
+    "image_pull_secrets": [
+      "neuro-registry-auth"
+    ],
+    "secrets": [
+      {
+        "name": "sendgrid",
+        "mount_path": "/tmp/sendgrid"
+      }
+    ]
   }
 }

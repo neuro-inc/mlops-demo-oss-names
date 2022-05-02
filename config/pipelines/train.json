@@ -3,6 +3,12 @@
     "name": "train"
   },
   "description": "A pipeline that runs training.",
+  "input": {
+    "pfs": {
+      "repo": "preprocess",
+      "glob": "/"
+    }
+  },
   "transform": {
     "image": "ghcr.io/neuro-inc/neuro-flow:21.11.2",
     "cmd": [
@@ -18,14 +24,8 @@
     ],
     "env": {
       "NEURO_PASSED_CONFIG": "${NEURO_CONFIG}",
-      "LIVE_B64": "##LIVE_B64##",
-      "PROJECT_B64": "##PROJECT_B64##",
-    }
-  },
-  "input": {
-    "pfs": {
-      "repo": "preprocess",
-      "glob": "/"
+      "LIVE_B64": "##LIVE_B64_VAL##",
+      "PROJECT_B64": "##PROJECT_B64##"
     }
   }
 }

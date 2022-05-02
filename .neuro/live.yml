@@ -98,7 +98,7 @@ jobs:
       volumes_project_remote: $[[ volumes.project.remote ]]
 
   postgres:
-    image: image:postgres:12.5
+    image: postgres:12.5
     name: $[[ flow.flow_id ]]-postgres
     preset: cpu-small
     http_port: 5432
