@@ -2,8 +2,8 @@ kind: batch
 tasks:
   - strategy:
       matrix:
-        lr: [0.1, 0.01, 0.001]
-        ratio: [0.2, 0.4]
+        lr: [100, 10, 1]
+        ratio: [2, 4]
     image: ubuntu
     preset: cpu-small
     bash: |
