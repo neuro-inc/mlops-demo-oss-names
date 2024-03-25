@@ -1,7 +1,4 @@
-FROM neuromation/base:v1.7.8
-
-RUN mkdir /project
-WORKDIR /project
+FROM ghcr.io/neuro-inc/base:latest-runtime
 
 COPY apt.txt .
 RUN export DEBIAN_FRONTEND=noninteractive && \
