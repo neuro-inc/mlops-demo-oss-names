@@ -33,7 +33,7 @@ volumes:
 
 images:
   myimage:
-    ref: image:$[[ flow.project_id ]]:v3
+    ref: image:$[[ flow.project_id ]]:v1
     dockerfile: $[[ flow.workspace ]]/Dockerfile
     context: $[[ flow.workspace ]]/
     build_preset: cpu-small
